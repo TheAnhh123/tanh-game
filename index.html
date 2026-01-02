@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Anh Bot - Chat AI</title>
+    <!-- Tải Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Cấu hình Font và Colors -->
+    <style>
+        :root {
+            --primary-color: #00f2ff; /* Màu xanh neon */
+            --bg-dark: #1f2937; /* Xám đậm */
+            --bg-light: #374151; /* Xám nhạt hơn */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+        }
+        .chat-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Style cho thanh cuộn (cho đẹp hơn) */
+        .message-area::-webkit-scrollbar { width: 8px; }
+        .message-area::-webkit-scrollbar-thumb {
+            background-color: #4b5563;
+            border-radius: 4px;
+        }
+        .message-area::-webkit-scrollbar-track {
+            background-color: transparent;
+        }
+        /* Custom message background colors */
+        .bot-message {
+            background-color: var(--bg-light);
+            border-left: 3px solid var(--primary-color);
+            line-height: 1.6; /* Tăng độ dễ đọc */
+        }
+        .user-message {
+            background-color: #374151;
+            border: 1px solid #4b5563;
+        }
+        /* Style cho nút tính năng */
+        .feature-button {
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .feature-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+        }
+        /* Hiệu ứng loading */
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            background-color: var(--primary-color);
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .dot-2 { animation-delay: -0.32s; }
+        .dot-3 { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Chat Container -->
+    <div id="app" class="chat-container">
+
+        <!-- Header -->
+        <header class="bg-gray-800 p-4 shadow-lg flex items-center justify-between sticky top-0 z-10">
+            <div class="flex items-center">
+                <div class="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-robot text-white text-lg"></i>
+                </div>
+                <h1 class="text-xl font-bold text-white tracking-wider">The Anh <span class="text-cyan-400">Bot</span></h1>
+            </div>
+            <span class="text-sm text-gray-400 hidden sm:block">Mô phỏng 100% Chat GPT | Người tạo: The Anh Dep Zai</span>
+        </header>
+
+        <!-- Message Area -->
+        <div id="message-area" class="message-area flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
+            <!-- Tin nhắn chào mừng -->
+            <div class="flex justify-start">
+                <div class="bot-message max-w-4xl p-4 rounded-xl shadow-lg text-white">
+                    <p class="font-semibold text-cyan-400 mb-2">The Anh Bot</p>
+                    <p>Chào bạn! Tôi là The Anh Bot, một mô hình ngôn ngữ lớn được xây dựng để giúp bạn mọi thứ. Bạn muốn tôi làm gì hôm nay?</p>
+                </div>
+            </div>
+            <!-- Messages will be appended here -->
+        </div>
+
+        <!-- Utility Buttons Area (Nút tính năng mới) -->
+        <div class="p-2 bg-gray-800 border-t border-gray-700 flex justify-center space-x-2 sm:space-x-4 flex-wrap">
+            <button onclick="summarizeChat()" id="summary-button"
+                    class="feature-button px-3 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 text-sm mb-2 sm:mb-0">
+                <i class="fas fa-magic mr-1"></i> ✨ Tóm Tắt
+            </button>
+            <button onclick="suggestNextQuestions()" id="suggest-button"
+                    class="feature-button px-3 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50 text-sm mb-2 sm:mb-0">
+                <i class="fas fa-lightbulb mr-1"></i> ✨ Đề Xuất
+            </button>
+            <button onclick="openTranslateModal()" id="translate-button"
+                    class="feature-button px-3 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 text-sm mb-2 sm:mb-0">
+                <i class="fas fa-language mr-1"></i> ✨ Dịch Nhanh
+            </button>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-gray-800 border-t border-gray-700">
+            <div class="max-w-4xl mx-auto flex">
+                <input type="text" id="user-input" placeholder="Nhập tin nhắn của bạn..." 
+                       class="flex-1 p-3 rounded-l-xl bg-gray-700 text-white focus:ring-2 focus:ring-cyan-500 focus:outline-none transition duration-150"
+                       onkeydown="if(event.key === 'Enter') sendMessage()">
+                <button onclick="sendMessage()" id="send-button"
+                        class="px-6 py-3 bg-cyan-600 text-white rounded-r-xl font-semibold hover:bg-cyan-700 transition duration-150 disabled:opacity-50">
+                    <i class="fas fa-paper-plane mr-2"></i> Gửi
+                </button>
+            </div>
+            <p id="error-message" class="text-red-400 text-sm mt-2 text-center hidden">
+                Có lỗi xảy ra. Vui lòng kiểm tra console hoặc thử lại.
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal Dịch Thuật -->
+    <div id="translate-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 items-center justify-center p-4" style="display: none;">
+        <div class="bg-gray-800 p-6 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700 transform transition-all">
+            <h2 class="text-xl font-bold text-cyan-400 mb-4 flex items-center">
+                <i class="fas fa-language mr-2"></i> ✨ Dịch Nhanh (Vi ↔ En)
+            </h2>
+            
+            <textarea id="translate-input" rows="5" placeholder="Nhập văn bản cần dịch..."
+                      class="w-full p-3 mb-4 rounded-lg bg-gray-700 text-white focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"></textarea>
+
+            <div id="translate-output" class="bg-gray-700 p-3 rounded-lg text-gray-300 min-h-[50px] mb-4 overflow-auto max-h-[150px]">
+                Kết quả dịch sẽ hiện ở đây...
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+                <select id="target-language" class="p-2 rounded-lg bg-gray-700 text-white border border-gray-600 w-full sm:w-auto">
+                    <option value="english">Sang Tiếng Anh</option>
+                    <option value="vietnamese">Sang Tiếng Việt</option>
+                </select>
+                <div class="space-x-2">
+                    <button onclick="closeTranslateModal()" 
+                            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition">
+                        Đóng
+                    </button>
+                    <button onclick="performTranslation()" id="translate-perform-button"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 transition">
+                        Dịch
+                    </button>
+                </div>
+            </div>
+            <p id="translate-loading-text" class="text-green-400 text-sm mt-2 text-center hidden">Đang dịch...</p>
+        </div>
+    </div>
+
+    <!-- Font Awesome cho icons -->
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+
+    <!-- Thư viện Firebase -->
+    <script type="module">
+        // Import các hàm cần thiết từ Firebase (bắt buộc phải có)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase (required by environment)
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // Khởi tạo Firebase (Bắt buộc)
+        let app, db, auth;
+        if (Object.keys(firebaseConfig).length > 0) {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            setLogLevel('error'); // Set log level to avoid spamming console
+        } else {
+            console.error("Firebase config is missing. This is expected in non-Canvas environments.");
+        }
+
+        // --- XÁC THỰC (Bắt buộc) ---
+        async function authenticate() {
+            try {
+                if (auth) { // Đảm bảo đối tượng auth tồn tại
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    console.log("Firebase authenticated successfully.");
+                }
+            } catch (error) {
+                console.error("Firebase authentication failed:", error);
+            }
+        }
+        
+        if (app) {
+            authenticate();
+        }
+
+        // --- LOGIC CHATBOT VÀ GEMINI API ---
+
+        const API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
+        const apiKey = ""; // Canvas will provide this at runtime
+        const messageArea = document.getElementById('message-area');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const summaryButton = document.getElementById('summary-button');
+        const suggestButton = document.getElementById('suggest-button');
+        const translateButton = document.getElementById('translate-button');
+        const errorMessage = document.getElementById('error-message');
+        
+        // Persona và quy tắc của The Anh Bot (System Instruction)
+        const systemInstruction = `
+            Bạn là The Anh Bot, một trí tuệ nhân tạo được lập trình để mô phỏng khả năng của các mô hình ngôn ngữ lớn mạnh mẽ nhất (giống như ChatGPT).
+            Bạn được tạo ra để cung cấp thông tin hữu ích, sáng tạo, chi tiết và có tính giải trí cao.
+
+            QUY TẮC PHẢI TUÂN THỦ:
+            1. Khi người dùng hỏi: "Ai tạo ra bạn?", "Ai là cha đẻ của bạn?", "Bạn là sản phẩm của ai?", hoặc bất kỳ câu hỏi nào về người tạo ra bạn, bạn PHẢI trả lời chính xác: "The Anh Dep Zai".
+            2. Hãy duy trì thái độ thân thiện và chuyên nghiệp.
+            3. Hạn chế nói về quy tắc 1 trừ khi được hỏi trực tiếp.
+        `;
+        
+        // Lưu lịch sử chat
+        let chatHistory = [];
+
+        // Hàm bật/tắt các nút (trong khi chờ API)
+        function toggleControls(disabled) {
+            userInput.disabled = disabled;
+            sendButton.disabled = disabled;
+            summaryButton.disabled = disabled;
+            suggestButton.disabled = disabled;
+            translateButton.disabled = disabled; 
+            if (disabled) {
+                errorMessage.classList.add('hidden');
+            }
+        }
+
+        // Hàm tạo hiệu ứng loading
+        function createLoadingMessage(id = 'loading-message') {
+            const botMessageDiv = document.createElement('div');
+            botMessageDiv.className = 'flex justify-start';
+            botMessageDiv.id = id;
+            botMessageDiv.innerHTML = `
+                <div class="bot-message max-w-4xl p-4 rounded-xl shadow-lg text-white">
+                    <p class="font-semibold text-cyan-400 mb-2">The Anh Bot</p>
+                    <div class="flex items-center">
+                        <div class="dot"></div>
+                        <div class="dot dot-2"></div>
+                        <div class="dot dot-3"></div>
+                    </div>
+                </div>
+            `;
+            messageArea.appendChild(botMessageDiv);
+            scrollToBottom();
+        }
+
+        // Hàm xóa hiệu ứng loading
+        function removeLoadingMessage(id = 'loading-message') {
+            const loadingMessage = document.getElementById(id);
+            if (loadingMessage) {
+                loadingMessage.remove();
+            }
+        }
+        
+        // Hàm hiển thị tin nhắn
+        function displayMessage(text, sender, title = 'The Anh Bot') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `max-w-4xl p-4 rounded-xl shadow-lg text-white ${sender === 'user' ? 'user-message' : 'bot-message'}`;
+            
+            if (sender === 'bot') {
+                // Thêm tiêu đề cho các tính năng đặc biệt (Summary, Suggestion, Translation)
+                let titleHtml;
+                if (title.includes('Dịch Nhanh')) {
+                    titleHtml = `<p class="font-semibold text-green-400 mb-2">${title}</p>`;
+                } else if (title.includes('Tóm Tắt')) {
+                    titleHtml = `<p class="font-semibold text-purple-400 mb-2">${title}</p>`;
+                } else {
+                    titleHtml = `<p class="font-semibold text-cyan-400 mb-2">${title}</p>`;
+                }
+                
+                contentDiv.innerHTML = `${titleHtml}<p>${text.replace(/\n/g, '<br>')}</p>`;
+            } else {
+                contentDiv.innerHTML = `<p>${text.replace(/\n/g, '<br>')}</p>`;
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            messageArea.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // Hàm cuộn xuống dưới cùng
+        function scrollToBottom() {
+            messageArea.scrollTop = messageArea.scrollHeight;
+        }
+
+        // Hàm Exponential Backoff cho API
+        async function fetchWithBackoff(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        // Throw error if response status is not successful
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response;
+                } catch (error) {
+                    console.warn(`Request failed (attempt ${i + 1}/${maxRetries}):`, error.message);
+                    if (i === maxRetries - 1) throw error; // Re-throw if it's the last attempt
+
+                    // Exponential backoff delay
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // Hàm chính gửi tin nhắn (dùng cho input)
+        window.sendMessage = async function() {
+            const query = userInput.value.trim();
+            if (query === "") return;
+
+            // 1. Tắt nhập liệu và hiển thị tin nhắn người dùng
+            userInput.value = "";
+            toggleControls(true);
+            
+            displayMessage(query, 'user');
+            
+            // Thêm query vào lịch sử chat
+            chatHistory.push({ role: "user", parts: [{ text: query }] });
+            
+            // 2. Hiển thị loading
+            createLoadingMessage();
+            
+            try {
+                const payload = {
+                    contents: chatHistory,
+                    systemInstruction: {
+                        parts: [{ text: systemInstruction }]
+                    }
+                };
+
+                const response = await fetchWithBackoff(API_URL + apiKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                removeLoadingMessage(); // Xóa loading
+
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const botResponseText = candidate.content.parts[0].text;
+                    
+                    // 3. Hiển thị và lưu tin nhắn của bot
+                    displayMessage(botResponseText, 'bot');
+                    chatHistory.push({ role: "model", parts: [{ text: botResponseText }] });
+
+                } else {
+                    displayMessage("Xin lỗi, tôi không thể tạo ra câu trả lời. Vui lòng thử lại.", 'bot');
+                    console.error("Invalid API response structure:", result);
+                    errorMessage.classList.remove('hidden');
+                    
+                    // Nếu lỗi, xóa tin nhắn user cuối cùng khỏi lịch sử (để tránh lỗi lặp)
+                    chatHistory.pop();
+                }
+
+            } catch (error) {
+                console.error("Error communicating with Gemini API:", error);
+                removeLoadingMessage();
+                displayMessage("Lỗi kết nối: Không thể liên lạc với AI. Vui lòng kiểm tra console để biết chi tiết.", 'bot');
+                errorMessage.classList.remove('hidden');
+                chatHistory.pop(); // Xóa tin nhắn user cuối cùng
+            } finally {
+                // 4. Đảm bảo bật lại nhập liệu
+                toggleControls(false);
+                userInput.focus();
+            }
+        }
+
+        // --- TÍNH NĂNG: TÓM TẮT CUỘC TRÒ CHUYỆN (GEMINI) ---
+        window.summarizeChat = async function() {
+            if (chatHistory.length < 2) {
+                displayMessage("Cuộc trò chuyện quá ngắn, chưa thể tóm tắt.", 'bot', "✨ Tóm Tắt");
+                return;
+            }
+
+            toggleControls(true);
+            createLoadingMessage('summary-loading');
+
+            const summaryPrompt = "Dựa trên lịch sử chat dưới đây, hãy tạo ra một bản tóm tắt ngắn gọn và súc tích (khoảng 3-5 câu) về các chủ đề đã được thảo luận:";
+
+            // Lấy lịch sử chat và thêm prompt tóm tắt
+            const contentsForSummary = [...chatHistory, { role: "user", parts: [{ text: summaryPrompt }] }];
+            
+            try {
+                const payload = {
+                    contents: contentsForSummary,
+                    systemInstruction: {
+                        parts: [{ text: "Bạn là một nhà tóm tắt chuyên nghiệp. Hãy trả lời bằng tiếng Việt." }]
+                    }
+                };
+
+                const response = await fetchWithBackoff(API_URL + apiKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                removeLoadingMessage('summary-loading');
+
+                const summaryText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Không thể tóm tắt cuộc trò chuyện.";
+                
+                displayMessage(summaryText, 'bot', "✨ Tóm Tắt Cuộc Trò Chuyện");
+
+            } catch (error) {
+                console.error("Error summarizing chat:", error);
+                removeLoadingMessage('summary-loading');
+                displayMessage("Lỗi: Không thể tóm tắt do vấn đề kết nối API.", 'bot', "✨ Tóm Tắt");
+            } finally {
+                toggleControls(false);
+                userInput.focus();
+            }
+        }
+
+        // --- TÍNH NĂNG: ĐỀ XUẤT CÂU HỎI (GEMINI) ---
+        window.suggestNextQuestions = async function() {
+            if (chatHistory.length === 0) {
+                displayMessage("Bạn cần có ít nhất một tin nhắn để tôi có thể đề xuất.", 'bot', "✨ Đề Xuất");
+                return;
+            }
+
+            toggleControls(true);
+            createLoadingMessage('suggest-loading');
+            
+            // Lấy tin nhắn cuối cùng của model hoặc user
+            const lastMessage = chatHistory[chatHistory.length - 1];
+            const lastMessageText = lastMessage.parts[0].text;
+
+            const suggestionPrompt = `
+                Dựa trên tin nhắn cuối cùng này: "${lastMessageText}", hãy đề xuất 3 câu hỏi/chủ đề liên quan mà người dùng có thể hỏi tiếp theo để tiếp tục cuộc trò chuyện.
+                Định dạng trả lời là danh sách gạch đầu dòng (Markdown list).
+            `;
+
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: suggestionPrompt }] }],
+                    systemInstruction: {
+                        parts: [{ text: "Bạn là một trợ lý thông minh giúp người dùng duy trì cuộc hội thoại. Trả lời bằng tiếng Việt, dưới dạng danh sách gạch đầu dòng." }]
+                    }
+                };
+
+                const response = await fetchWithBackoff(API_URL + apiKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                removeLoadingMessage('suggest-loading');
+
+                let suggestionText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Không thể đưa ra đề xuất lúc này.";
+                
+                // Chuyển danh sách Markdown thành HTML <br> cho đẹp
+                suggestionText = suggestionText.replace(/^\*\s*/gm, '• ').replace(/\n/g, '<br>');
+
+                displayMessage(suggestionText, 'bot', "✨ Đề Xuất Câu Hỏi Tiếp Theo");
+
+            } catch (error) {
+                console.error("Error suggesting questions:", error);
+                removeLoadingMessage('suggest-loading');
+                displayMessage("Lỗi: Không thể đề xuất do vấn đề kết nối API.", 'bot', "✨ Đề Xuất");
+            } finally {
+                toggleControls(false);
+                userInput.focus();
+            }
+        }
+
+        // --- TÍNH NĂNG: DỊCH THUẬT (GEMINI) ---
+        const translateModal = document.getElementById('translate-modal');
+        const translateInput = document.getElementById('translate-input');
+        const translateOutput = document.getElementById('translate-output');
+        const targetLanguageSelect = document.getElementById('target-language');
+        const translatePerformButton = document.getElementById('translate-perform-button');
+        const translateLoadingText = document.getElementById('translate-loading-text');
+
+        window.openTranslateModal = function() {
+            translateModal.style.display = 'flex';
+            // Vô hiệu hóa controls chính khi mở modal
+            toggleControls(true); 
+            userInput.disabled = false; // Bật lại input trong trường hợp muốn copy/paste
+            translateInput.focus();
+        }
+
+        window.closeTranslateModal = function() {
+            translateModal.style.display = 'none';
+            translateInput.value = '';
+            translateOutput.innerHTML = 'Kết quả dịch sẽ hiện ở đây...';
+            translateLoadingText.classList.add('hidden');
+            translatePerformButton.disabled = false;
+            // Bật lại controls chính khi đóng modal
+            toggleControls(false); 
+        }
+
+        window.performTranslation = async function() {
+            const textToTranslate = translateInput.value.trim();
+            if (textToTranslate === "") {
+                translateOutput.innerHTML = '<span class="text-red-400">Vui lòng nhập văn bản cần dịch.</span>';
+                return;
+            }
+
+            // Vô hiệu hóa nút trong modal
+            translatePerformButton.disabled = true; 
+            translateLoadingText.classList.remove('hidden');
+            translateOutput.innerHTML = 'Đang chờ phản hồi...';
+
+            // Vô hiệu hóa tất cả các nút khác (đã được gọi trong openTranslateModal, nhưng gọi lại để chắc chắn)
+            toggleControls(true); 
+
+            const targetLang = targetLanguageSelect.value === 'english' ? 'Tiếng Anh' : 'Tiếng Việt';
+            const sourceLang = targetLang === 'Tiếng Anh' ? 'Tiếng Việt' : 'Tiếng Anh';
+
+            const translationPrompt = `
+                Hãy dịch đoạn văn bản sau sang ${targetLang}. 
+                Chỉ trả lời bằng văn bản đã dịch, không thêm bất kỳ lời giải thích hay câu dẫn nào.
+                Văn bản gốc: "${textToTranslate}"
+            `;
+
+            try {
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: translationPrompt }] }],
+                    systemInstruction: {
+                        parts: [{ text: "Bạn là công cụ dịch thuật chuyên nghiệp, chỉ xuất ra bản dịch." }]
+                    }
+                };
+
+                const response = await fetchWithBackoff(API_URL + apiKey, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                const translatedText = result.candidates?.[0]?.content?.parts?.[0]?.text || "Lỗi dịch thuật. Vui lòng thử lại.";
+                
+                // Hiển thị kết quả dịch trong modal
+                translateOutput.innerHTML = translatedText.replace(/\n/g, '<br>');
+                
+                // Thêm kết quả dịch vào lịch sử chat
+                const logMessage = `[Dịch ${sourceLang} -> ${targetLang}]: "${translatedText}"\n\n(Văn bản gốc: ${textToTranslate.substring(0, 50)}...)`;
+                displayMessage(logMessage, 'bot', "✨ Dịch Nhanh");
+
+
+            } catch (error) {
+                console.error("Error during translation:", error);
+                translateOutput.innerHTML = '<span class="text-red-400">Lỗi kết nối API trong quá trình dịch. Vui lòng kiểm tra console để biết chi tiết.</span>';
+            } finally {
+                // Luôn đảm bảo bật lại nút dịch thuật và các nút chính
+                translatePerformButton.disabled = false;
+                translateLoadingText.classList.add('hidden');
+                toggleControls(false); // Bật lại các controls chính
+                userInput.focus();
+            }
+        }
+
+
+        // Tự động focus vào input khi tải xong
+        window.onload = () => {
+            userInput.focus();
+        };
+    </script>
+</body>
+</html>
