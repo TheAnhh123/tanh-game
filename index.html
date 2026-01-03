@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Túi Mù Tri Thức (Made By The Anh)</title>
+    <title>Túi Mù Tri Thức</title>
     <style>
         :root {
             --primary-color: #6c5ce7;
@@ -263,14 +263,20 @@
         .btn-option.wrong { background: #fab1a0; color: #b33939; border-color: #d63031; }
 
         /* --- Loading Spinner --- */
+        .loading-spinner-container {
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+             padding: 50px 0;
+        }
         .loading-spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
+            border: 4px solid rgba(108, 92, 231, 0.3);
             border-radius: 50%;
-            border-top: 4px solid white;
+            border-top: 4px solid var(--primary-color);
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto;
         }
 
         @keyframes spin {
@@ -306,7 +312,7 @@
         <!-- Màn hình Menu -->
         <div id="menu-screen">
             <h1>🎒 Túi Mù Tri Thức 🎒</h1>
-            <p class="subtitle">Nguồn câu hỏi vô tận - Sẵn sàng chờ bạn ở phía trước!</p>
+            <p class="subtitle">Chọn lĩnh vực để trả lời câu hỏi - 10s trả lời!</p>
             
             <div class="subject-list">
                 <button class="btn-subject" onclick="startGame('Toán Học')"><span>📐</span> Toán Học</button>
@@ -351,11 +357,12 @@
     <div id="notification">Thông báo</div>
 
     <script>
-        const API_KEY = ""; // Sẽ được Canvas cung cấp
+        // API Configuration (API Key is provided by the environment)
+        const API_KEY = ""; 
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`;
         const MAX_RETRIES = 5;
 
-        // --- 1. HÀM TẠO CÂU HỎI TOÁN HỌC VÔ TẬN (Không dùng API) ---
+        // --- 1. HÀM TẠO CÂU HỎI TOÁN HỌC (Không dùng API) ---
         function generateMathQuestion() {
             const types = ['+', '-', '*', '/'];
             const type = types[Math.floor(Math.random() * types.length)];
@@ -376,19 +383,20 @@
                 a = b * result; qStr = `${a} : ${b} = ?`;
             }
 
-            // Tạo đáp án sai ngẫu nhiên
             let wrong1 = result + Math.floor(Math.random() * 5) + 1;
             let wrong2 = result - Math.floor(Math.random() * 3) - 1;
             let wrong3 = result + 10;
-            let initialAnswers = [result, wrong1, wrong2, wrong3];
+            let initialAnswers = [result.toString(), wrong1.toString(), wrong2.toString(), wrong3.toString()];
             
-            // Xáo trộn
             initialAnswers.sort(() => Math.random() - 0.5);
 
-            return { q: qStr, a: initialAnswers, c: initialAnswers.findIndex(ans => ans == result) };
+            // Tìm index của đáp án đúng (result)
+            const correctIndex = initialAnswers.findIndex(ans => parseInt(ans) === result);
+
+            return { q: qStr, a: initialAnswers, c: correctIndex };
         }
 
-        // --- 2. HÀM GỌI API ĐỂ SINH CÂU HỎI TRẮC NGHIỆM TỪ LLM (Nguồn vô tận) ---
+        // --- 2. HÀM GỌI API ĐỂ SINH CÂU HỎI TRẮC NGHIỆM TỪ LLM ---
         async function fetchQuestionFromGemini(subject) {
             const systemPrompt = "Bạn là một chuyên gia tạo câu hỏi trắc nghiệm. Hãy tạo một câu hỏi trắc nghiệm về lĩnh vực " + subject + ". Câu hỏi phải có 4 lựa chọn (A, B, C, D) và chỉ có MỘT đáp án đúng duy nhất. Trả lời bằng tiếng Việt và tuân thủ định dạng JSON nghiêm ngặt sau.";
             const userQuery = `Tạo một câu hỏi trắc nghiệm mới về ${subject} phù hợp cho học sinh trung học.`;
@@ -418,28 +426,36 @@
                         body: JSON.stringify(payload)
                     });
 
+                    // Check for network/HTTP errors
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        throw new Error(`Lỗi HTTP: ${response.status}`);
                     }
 
                     const result = await response.json();
                     const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
                     if (text) {
-                        // API trả về JSON dưới dạng string, cần parse nó
-                        const data = JSON.parse(text);
-                        // Kiểm tra tính hợp lệ cơ bản
-                        if (data.q && Array.isArray(data.a) && data.a.length === 4 && data.c !== undefined) {
-                            return data;
+                        try {
+                            const data = JSON.parse(text);
+                            // Validate the structure
+                            if (data.q && Array.isArray(data.a) && data.a.length === 4 && [0, 1, 2, 3].includes(data.c)) {
+                                return data;
+                            }
+                            throw new Error("Dữ liệu câu hỏi không đúng định dạng.");
+                        } catch (e) {
+                            console.error("Lỗi phân tích JSON:", e, "Text nhận được:", text);
+                            throw new Error("Không thể đọc câu trả lời từ máy chủ.");
                         }
                     }
-                    throw new Error("Invalid response structure from LLM.");
+                    throw new Error("Không nhận được nội dung câu hỏi.");
 
                 } catch (error) {
                     if (attempt === MAX_RETRIES - 1) {
-                        console.error("Gemini API call failed after multiple retries:", error);
-                        throw new Error("Không thể tải câu hỏi. Vui lòng thử lại.");
+                        // Throw the final error message
+                        console.error("Lỗi gọi API sau nhiều lần thử:", error);
+                        throw new Error("Lỗi tải câu hỏi. Vui lòng kiểm tra kết nối mạng hoặc thử lại.");
                     }
+                    // Exponential backoff delay
                     const delay = Math.pow(2, attempt) * 1000;
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
@@ -451,8 +467,8 @@
         let currentBagElement = null;
         let score = 0;
         let timerInterval;
-        const TIME_LIMIT = 10; // Giới hạn 10 giây
-        let isQuestionActive = false; // Ngăn chặn tương tác khi đang tải
+        const TIME_LIMIT = 10;
+        let isQuestionActive = false; 
 
         function startGame(subject) {
             currentSubject = subject;
@@ -491,7 +507,7 @@
             // Hiện modal loading
             isQuestionActive = true;
             document.getElementById('subject-badge').innerText = currentSubject;
-            document.getElementById('question-display').innerHTML = '<div class="loading-spinner"></div><p style="text-align:center; margin-top: 10px;">Đang tải câu hỏi AI...</p>';
+            document.getElementById('question-display').innerHTML = '<div class="loading-spinner-container"><div class="loading-spinner"></div><p style="text-align:center; margin-top: 10px;">Đang tạo câu hỏi...</p></div>';
             document.getElementById('options-display').innerHTML = '';
             document.getElementById('quiz-modal').classList.add('active');
 
@@ -501,7 +517,6 @@
                 if (currentSubject === 'Toán Học') {
                     questionData = generateMathQuestion();
                 } else {
-                    // Dùng AI để sinh câu hỏi cho các môn còn lại
                     questionData = await fetchQuestionFromGemini(currentSubject);
                 }
                 
@@ -509,14 +524,15 @@
                 showQuestion(questionData);
             } catch (error) {
                 console.error(error);
-                document.getElementById('question-display').innerText = error.message || "Lỗi tải câu hỏi AI. Vui lòng thử lại túi khác.";
+                // Hiển thị thông báo lỗi thân thiện
+                document.getElementById('question-display').innerHTML = `<div style="text-align:center; color: var(--wrong-color);">⚠️ ${error.message}</div>`;
                 document.getElementById('options-display').innerHTML = '';
                 
                 // Tắt modal sau 2s báo lỗi
                 setTimeout(() => {
                     document.getElementById('quiz-modal').classList.remove('active');
                     isQuestionActive = false;
-                }, 2000);
+                }, 2500);
             }
         }
 
@@ -530,7 +546,8 @@
             questionData.a.forEach((ans, index) => {
                 const btn = document.createElement('button');
                 btn.className = 'btn-option';
-                btn.innerText = ans;
+                // Sử dụng innerHTML để hỗ trợ hiển thị các ký tự toán học (nếu có)
+                btn.innerHTML = ans; 
                 btn.onclick = () => answerSelected(btn, index, questionData.c);
                 optionsDiv.appendChild(btn);
             });
@@ -545,7 +562,6 @@
             bar.style.width = '100%';
             bar.style.backgroundColor = varCssValue('--timer-color');
             
-            // Thiết lập lại transition cho hiệu ứng chạy mượt
             bar.style.transition = 'none';
             bar.offsetHeight; 
             bar.style.transition = 'width 10s linear, background-color 1s linear';
@@ -557,7 +573,7 @@
                 timeLeft--;
                 
                 if (timeLeft === 3) {
-                    bar.style.backgroundColor = varCssValue('--wrong-color'); // Đỏ
+                    bar.style.backgroundColor = varCssValue('--wrong-color');
                 }
 
                 if (timeLeft <= 0) {
@@ -568,6 +584,7 @@
         }
 
         function varCssValue(variable) {
+            // Lấy giá trị biến CSS để sử dụng trong JS
             return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
         }
 
@@ -578,7 +595,6 @@
             const allBtns = document.querySelectorAll('.btn-option');
             allBtns.forEach(b => b.disabled = true);
             
-            // Hiện đáp án đúng
             if (correctIndex !== undefined && allBtns[correctIndex]) {
                  allBtns[correctIndex].classList.add('correct');
             }
@@ -617,7 +633,7 @@
 
         function closeModalAndResetBag(isCorrect) {
             document.getElementById('quiz-modal').classList.remove('active');
-            isQuestionActive = false; // Cho phép mở túi mới
+            isQuestionActive = false;
             
             if(isCorrect && currentBagElement) {
                 currentBagElement.classList.add('opened');
